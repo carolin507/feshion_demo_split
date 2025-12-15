@@ -1,0 +1,12 @@
+{
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/modules"
+    ],
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}",
+        "${workspaceFolder}/modules"
+    ],
+    "python.analysis.useImportHeuristics": true,
+    "git.ignoreLimitWarning": true
+}
