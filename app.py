@@ -85,15 +85,16 @@ if "page" not in st.session_state:
 # ------------------------------------------------------------
 allowed_pages = {"wardrobe", "lookbook", "dashboard", "crm", "sales", "reviews", "intro"}
 
+# Read query params robustly (works for both new and old Streamlit APIs)
 try:
-    params = st.query_params  # 新版 API
+    params = st.query_params  # new API
+    page_param = params.get("page")
 except Exception:
     params = st.experimental_get_query_params()  # fallback
+    page_param = params.get("page")
 
-
-if "page" in params:
-    value = params["page"]
-    page_val = value[0] if isinstance(value, list) else value
+if page_param:
+    page_val = page_param[0] if isinstance(page_param, list) else page_param
     st.session_state.page = page_val if page_val in allowed_pages else "intro"
 
 
