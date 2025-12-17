@@ -6,9 +6,93 @@
 #   - 自動帶出正確圖片 URL
 # ------------------------------------------------------------
 
+import random
 import math
 from collections import defaultdict, Counter
+from functools import lru_cache
 import pandas as pd
+
+IMAGE_INDEX_PATH = "data/image_label_index.csv"
+IMAGE_BASE_URL = (
+    "https://raw.githubusercontent.com/"
+    "carolin507/fashion_demo_split/main/assets/output/"
+)
+
+# ------------------------------------------------------------
+# Image helpers
+# ------------------------------------------------------------
+def _normalize_label(value) -> str:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    return str(value).strip().lower()
+
+
+@lru_cache(maxsize=1)
+def load_image_index(csv_path: str = IMAGE_INDEX_PATH):
+    """Load image_label_index.csv once; return None on failure."""
+    try:
+        df = pd.read_csv(csv_path)
+    except FileNotFoundError:
+        print(f"[recommender_pair] image index not found: {csv_path}")
+        return None
+    except Exception as exc:
+        print(f"[recommender_pair] failed to load image index: {exc}")
+        return None
+
+    df = df.copy()
+    for col in ["gender", "color", "style", "category"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip().str.lower()
+
+    return df
+
+
+def _filter_by_conditions(image_db: pd.DataFrame, conditions):
+    filtered = image_db
+    for col, val in conditions:
+        if not val:
+            return pd.DataFrame()
+        filtered = filtered[filtered[col] == val]
+    return filtered
+
+
+def resolve_image_url(image_db, gender, color, style, category):
+    """
+    Resolve an image URL from the indexed image database using priority rules.
+
+    Priority order:
+      1. gender + color + style + category
+      2. gender + color + category
+      3. gender + color
+      4. gender
+    Returns a raw GitHub URL or None.
+    """
+    if image_db is None or image_db.empty:
+        return None
+
+    g = _normalize_label(gender)
+    c = _normalize_label(color)
+    s = _normalize_label(style)
+    cat = _normalize_label(category)
+
+    if not g:
+        return None
+
+    priorities = [
+        [("gender", g), ("color", c), ("style", s), ("category", cat)],
+        [("gender", g), ("color", c), ("category", cat)],
+        [("gender", g), ("color", c)],
+        [("gender", g)],
+    ]
+
+    for conds in priorities:
+        candidates = _filter_by_conditions(image_db, conds)
+        if not candidates.empty:
+            filename = random.choice(candidates["filename"].tolist())
+            if filename:
+                return f"{IMAGE_BASE_URL}{filename}"
+
+    return None
 
 
 # ------------------------------------------------------------
@@ -194,33 +278,14 @@ class HybridRecommender:
 # 圖片 URL 匹配邏輯（非常重要）
 # ------------------------------------------------------------
 def match_image_url(df: pd.DataFrame, item: dict, gender: str):
-    """
-    找出 verified_photo_data.json 中與推薦 item 配對的圖片 URL。
-    """
-
-    g = gender.lower()
-    color = item["color"]
-    style = item["style"]
-    category = item["category"]
-    part = item["part"].lower()  # top or bottom
-
-    # 根據推薦方向決定要抓哪個欄位
-    target = "top" if part == "top" else "bottom"
-
-    for _, row in df.iterrows():
-        if row["gender"].lower() != g:
-            continue
-
-        candidate = row[target]
-
-        if (
-            candidate["color"] == color
-            and candidate["style"] == style
-            and candidate["category"] == category
-        ):
-            return row.get("filename")
-
-    return None
+    """Backward-compatible wrapper that delegates to resolve_image_url."""
+    return resolve_image_url(
+        load_image_index(),
+        gender=gender,
+        color=item.get("color"),
+        style=item.get("style"),
+        category=item.get("category"),
+    )
 
 
 # ------------------------------------------------------------
@@ -230,6 +295,7 @@ class GenderedRecommender:
     def __init__(self, df):
         self.df = df  # ⭐ 用於圖片搜尋
         self.models = {}
+        self.image_db = load_image_index()
 
         for g in ["men", "women"]:
             sub = df[df["gender"].str.lower() == g]
@@ -248,9 +314,15 @@ class GenderedRecommender:
         enriched = []
         for rec in raw_results:
             rec = dict(rec)
-            filename = match_image_url(self.df, rec, gender)
-            rec["filename"] = filename
-            rec["image_url"] = filename
+            image_url = resolve_image_url(
+                self.image_db,
+                gender=gender,
+                color=rec.get("color"),
+                style=rec.get("style"),
+                category=rec.get("category"),
+            )
+            rec["image_url"] = image_url
+            rec["filename"] = image_url.rsplit("/", 1)[-1] if image_url else None
             enriched.append(rec)
 
         return enriched

@@ -266,6 +266,13 @@ def render_wardrobe(RECOMMENDER: GenderedRecommender):
         border-radius: 12px;
         margin-bottom: 10px;
     }
+    .rec-img.placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #8b7b6a;
+        font-size: 13px;
+    }
 
     .tag-row {
         display: flex;
@@ -296,17 +303,21 @@ def render_wardrobe(RECOMMENDER: GenderedRecommender):
 
     
     cards = []
-    BASE_URL = "https://raw.githubusercontent.com/carolin507/fashion-demo-assets/main/assets/streetstyle/"
 
     for rec in recommendations[:3]:
         color = rec.get("color")
         style = rec.get("style")
         cat = rec.get("category")
-        image_path = rec.get("filename")
-        url = BASE_URL + image_path if image_path else ""
+        image_url = rec.get("image_url")
+
+        img_block = (
+            f'<img src="{image_url}" class="rec-img"/>'
+            if image_url
+            else '<div class="rec-img placeholder">No image</div>'
+        )
 
         cards.append(dedent(f'''<div class="rec-card">
-    <img src="{url}" class="rec-img"/>
+    {img_block}
     <div class="tag-row">
         <div class="tag-label">\u984f\u8272\uff1a</div>
         <span class="color-tag"
