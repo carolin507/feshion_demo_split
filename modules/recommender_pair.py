@@ -67,6 +67,10 @@ def resolve_image_url(image_db, gender, color, style, category):
       4. gender
     Returns a raw GitHub URL or None.
     """
+    # Map sparse categories to nearby substitutes to avoid unrelated fallbacks.
+    CATEGORY_FALLBACK = {
+        "dress": "jumpsuit",
+    }
     if image_db is None or image_db.empty:
         return None
 
@@ -74,6 +78,7 @@ def resolve_image_url(image_db, gender, color, style, category):
     c = _normalize_label(color)
     s = _normalize_label(style)
     cat = _normalize_label(category)
+    cat = CATEGORY_FALLBACK.get(cat, cat)
 
     if not g:
         return None
